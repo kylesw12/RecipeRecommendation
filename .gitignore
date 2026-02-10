@@ -1,0 +1,9 @@
+# Large datasets
+data/*.csv
+
+# Generated files
+data/*.pkl
+
+# Python cache
+__pycache__/
+*.pyc
