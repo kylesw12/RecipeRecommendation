@@ -112,6 +112,6 @@ if __name__ == "__main__":
             f"{r['final_score']:.4f} | "
             f"{r['RecipeId']} | "
             f"{r['Name']} "
-            f"(text={r['text_score']:.3f}, "
-            f"ing={r['ingredient_score']:.3f})"
+            f"(Text Score={r['text_score']:.3f}, "
+            f"Ingredient Score={r['ingredient_score']:.3f})"
         )
