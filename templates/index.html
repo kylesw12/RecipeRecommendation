@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF8">
+        <title>Recipe Search</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 40px;
+                background-color: #f4f4f4;
+            }
+
+            h1 {
+                color: #333;
+            }
+
+            input[type="text"] {
+                width: 400px;
+                padding: 8px;
+            }
+
+            button {
+                padding: 8px 12px;
+            }
+
+            .result {
+                background: white;
+                padding: 10px;
+                margin-top: 10px;
+                border-radius: 5px;
+            }
+
+            .score {
+                color: #777;
+                font-size: 0.9em;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Recipe Search</h1>
+
+        <form method="POST">
+            <input type="text" name="query" placeholder="Enter ingredients..." value="{{ query }}">
+            <button type="submit">Search</button>
+        </form>
+        {% for r in results %}
+        <div class="result">
+            <strong>{{ r.Name }}</strong><br>
+            <div class="score">
+                Score: {{ "%.4f"|format(r.score) }}
+            </div>
+        </div>
+        {% endfor %}
+    </body>
+</html>

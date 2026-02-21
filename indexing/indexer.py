@@ -6,7 +6,7 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from preprocess import load_recipes, preprocess_recipes
+from .preprocess import load_recipes, preprocess_recipes
 
 def build_inverted_index(df):
     inverted_index = defaultdict(set)
