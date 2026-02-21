@@ -3,8 +3,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
 import re
 import pandas as pd
-import indexer
-import preprocess
+from . import indexer
+from . import preprocess
 
 def normalize_query(q: str) -> str:
     q = q.lower()
