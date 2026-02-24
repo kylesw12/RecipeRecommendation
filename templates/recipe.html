@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF8">
+    <title>{{ recipe.Name }}</title>
+    <style>
+        body {
+            font-family: Arial;
+            margin: 40px;
+            background-color: #f4f4f4;
+        }
+
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        h1 {
+            margin-top: 0;
+        }
+
+        ul {
+            padding-left: 20px;
+        }
+
+        a {
+            text-decoration: none;
+            color: blue;
+        }
+    </style>
+</head>
+<body>
+<a href="/">← Back to Search</a>
+<div class="container">
+    <h1>{{ recipe.Name }}</h1>
+    <h3>Description</h3>
+    <p>{{ recipe.Description }}</p>
+
+    <h3>Ingredients</h3>
+    <ul>
+        {% for ingredient in recipe.parsed_ingredients %}
+            <li>{{ ingredient }}</li>
+        {% endfor %}
+    </ul>
+
+    <h3>Instructions</h3>
+    <p>{{ recipe.RecipeInstructions }}</p>
+
+    <h3>Category</h3>
+    <p>{{ recipe.RecipeCategory }}</p>
+</div>
+</body>
+</html>

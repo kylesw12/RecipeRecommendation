@@ -29,6 +29,15 @@ def home():
         results = search(query, df, inverted_index, vectorizer, tfidf_matrix, k=10)
     return render_template("index.html", results=results, query=query)
 
+@app.route("/recipe/<int:recipe_id>")
+def recipe_detail(recipe_id):
+    recipe = df[df["RecipeId"] == recipe_id]
+
+    if recipe.empty:
+        return "Recipe not found", 404
+    
+    recipe = recipe.iloc[0]
+    return render_template("recipe.html", recipe=recipe)
 if __name__ == "__main__":
     app.run(debug=True)
     

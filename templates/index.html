@@ -45,7 +45,11 @@
         </form>
         {% for r in results %}
         <div class="result">
-            <strong>{{ r.Name }}</strong><br>
+            <strong>
+                <a href="/recipe/{{ r.RecipeId }}">
+                    {{ r.Name }}
+                </a>
+            </strong>
             <div class="score">
                 Score: {{ "%.4f"|format(r.score) }}
             </div>
