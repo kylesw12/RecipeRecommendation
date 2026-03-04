@@ -1,59 +1,124 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF8">
-        <title>Recipe Search</title>
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                margin: 40px;
-                background-color: #f4f4f4;
-            }
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Recipe Code — Smart Recipe Search</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
 
-            h1 {
-                color: #333;
-            }
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="container">
+            <a href="/" class="navbar-brand">
+                <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 11h.01"/><path d="M11 15h.01"/><path d="M16 16h.01"/><path d="m2 16 20 6-6-20A20 20 0 0 0 2 16"/><path d="M5.71 17.11a17.04 17.04 0 0 1 11.4-11.4"/></svg>
+                The Recipe Code
+            </a>
+            <span class="navbar-tag">CS 125 Project</span>
+        </div>
+    </nav>
 
-            input[type="text"] {
-                width: 400px;
-                padding: 8px;
-            }
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-badge">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                250,000+ Recipes Indexed
+            </div>
+            <h1>Find the Perfect Recipe<br>with <span>What You Have</span></h1>
+            <p class="hero-description">
+                Type in the ingredients sitting in your kitchen and instantly discover delicious recipes you can make right now. Powered by TF-IDF ranking and cosine similarity, our search surfaces the most relevant matches from over 250K recipes.
+            </p>
 
-            button {
-                padding: 8px 12px;
-            }
+            <!-- Search Form -->
+            <form class="search-form" method="POST">
+                <span class="search-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                </span>
+                <input type="text" name="query" placeholder="e.g. chicken garlic lemon rice..." value="{{ query }}">
+                <button type="submit">Search Recipes</button>
+            </form>
 
-            .result {
-                background: white;
-                padding: 10px;
-                margin-top: 10px;
-                border-radius: 5px;
-            }
-
-            .score {
-                color: #777;
-                font-size: 0.9em;
-            }
-        </style>
-    </head>
-    <body>
-        <h1>Recipe Search</h1>
-
-        <form method="POST">
-            <input type="text" name="query" placeholder="Enter ingredients..." value="{{ query }}">
-            <button type="submit">Search</button>
-        </form>
-        {% for r in results %}
-        <div class="result">
-            <strong>
-                <a href="/recipe/{{ r.RecipeId }}">
-                    {{ r.Name }}
-                </a>
-            </strong>
-            <div class="score">
-                Score: {{ "%.4f"|format(r.score) }}
+            <div class="features-strip">
+                <div class="feature-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                    Ingredient-Based Search
+                </div>
+                <div class="feature-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18h8"/><path d="M3 22h18"/><path d="M14 22a7 7 0 1 0 0-14h-1"/><path d="M9 14h2"/><path d="M9 12a2 2 0 0 1-2-2V6h6v4a2 2 0 0 1-2 2Z"/><path d="M12 6V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3"/></svg>
+                    Smart TF-IDF Ranking
+                </div>
+                <div class="feature-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    Built for Students &amp; Home Cooks
+                </div>
             </div>
         </div>
-        {% endfor %}
-    </body>
+    </section>
+
+    <!-- Results Section -->
+    {% if results %}
+    <section class="results-section">
+        <div class="container">
+            <div class="results-header">
+                <h2>Search Results</h2>
+                <span class="results-count">{{ results|length }} recipes found</span>
+            </div>
+            <div class="results-grid">
+                {% for r in results %}
+                <a href="/recipe/{{ r.RecipeId }}" class="result-card">
+                    <div class="result-card-left">
+                        <span class="result-rank">{{ loop.index }}</span>
+                        <div class="result-info">
+                            <div class="result-name">{{ r.Name }}</div>
+                            <div class="result-score">
+                                Relevance: {{ "%.2f"|format(r.score) }}
+                                <span class="score-bar-track">
+                                    <span class="score-bar-fill" style="width: {{ [5, (r.score * 100)|round(0,'floor')|int]|max }}%"></span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <span class="result-arrow">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                    </span>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+    {% elif query %}
+    <section class="results-section">
+        <div class="container">
+            <div class="empty-state">
+                <svg class="empty-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="M8 11h6"/></svg>
+                <h3>No recipes found</h3>
+                <p>Try different ingredients or broader terms like "pasta" or "chicken salad".</p>
+            </div>
+        </div>
+    </section>
+    {% else %}
+    <section class="results-section">
+        <div class="container">
+            <div class="empty-state">
+                <svg class="empty-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 11h.01"/><path d="M11 15h.01"/><path d="M16 16h.01"/><path d="m2 16 20 6-6-20A20 20 0 0 0 2 16"/></svg>
+                <h3>Ready to cook something great?</h3>
+                <p>Enter the ingredients you have on hand, and we will find the best recipes for you.</p>
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <span class="footer-brand">The Recipe Code</span> CS 125 Next Generation Search Systems (UC Irvine)
+        </div>
+    </footer>
+
+</body>
 </html>
