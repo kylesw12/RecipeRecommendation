@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request
 from indexing import preprocess
 from indexing import indexer
-from indexing.search import search
+from indexing import search
 import os
 import ast
 import re
@@ -11,7 +11,7 @@ app = Flask(__name__)
 df = preprocess.load_recipes()
 df = preprocess.preprocess_recipes(df)
 
-if (not os.path.exists("data/inverted_index.pkl")) or (not os.path.exists("data/tfidf_vectorizer.pkl")):
+if (not os.path.exists("data/inverted_index.pkl")) or (not os.path.exists("data/tfidf_index.pkl")):
     indexer.build_and_save_index()
     vectorizer, tfidf_matrix = indexer.build_tfidf_index(df)
     indexer.save_tfidf_index(vectorizer, tfidf_matrix)
@@ -19,6 +19,11 @@ if (not os.path.exists("data/inverted_index.pkl")) or (not os.path.exists("data/
 inverted_index = indexer.load_index()
 vectorizer, tfidf_matrix = indexer.load_tfidf_index()
 
+if not os.path.exists("data/dish_archetypes.pkl"):
+    archetypes, dish_recipe_counts = search.build_dish_archetypes(df, top_n=30, min_recipes=200)
+    search.save_archetypes(archetypes, dish_recipe_counts)
+
+archetypes, _dish_recipe_counts = search.load_archetypes()
 
 @app.route("/", methods=["GET", "POST"])
 def home():
@@ -28,7 +33,7 @@ def home():
     if request.method == "POST":
         query = request.form.get("query", "").strip()
         if query:
-            results = search(query, df, inverted_index, vectorizer, tfidf_matrix, k=10)
+            results = search.search(query, df, inverted_index, vectorizer, tfidf_matrix, archetypes = archetypes, k=10)
 
     return render_template("index.html", results=results, query=query)
 

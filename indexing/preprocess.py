@@ -14,11 +14,15 @@ def load_recipes(path="data/recipes.csv"):
 def parse_ingredients(ingredients_str):
     if pd.isna(ingredients_str):
         return []
-    ingredients_str = ingredients_str.strip()
-    ingredients_str = ingredients_str[2:-1]
+    s = str(ingredients_str).strip()
 
-    parts = ingredients_str.split('", "')
-    parts = [p.replace('"', '') for p in parts]
+    if s.startswith("c(") and s.endswith(")"):
+        return parse_r_list(s)
+
+    if len(s) >= 3:
+        s = s[2:-1]
+    parts = s.split('", "')
+    parts = [p.replace('"', "") for p in parts]
     return parts
 
 
@@ -34,6 +38,7 @@ def parse_r_list(text):
 def normalize_ingredient(ingredient):
     ingredient = ingredient.lower()
     ingredient = re.sub(r"[^a-z\s]", "", ingredient)
+    ingredient = re.sub(r"\s+", " ", ingredient).strip()
     return ingredient.strip()
 
 def clean_text(text):
