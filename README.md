@@ -24,7 +24,7 @@
 
 ## step 1
 
-<img width="1873" height="1029" alt="new1" src="https://github.com/user-attachments/assets/a3d87e8c-c10a-4106-9f23-4087bf8d787b" />
+<img width="1908" height="1075" alt="new2" src="https://github.com/user-attachments/assets/e938e84a-0f50-43b0-ae87-6f5ab185d25a" />
 
 ## step 2
 
@@ -32,4 +32,5 @@
 
 ## step 3
 
-<img width="1908" height="1075" alt="new2" src="https://github.com/user-attachments/assets/e938e84a-0f50-43b0-ae87-6f5ab185d25a" />
+<img width="1873" height="1029" alt="new1" src="https://github.com/user-attachments/assets/a3d87e8c-c10a-4106-9f23-4087bf8d787b" />
+
