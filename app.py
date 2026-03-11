@@ -1,132 +1,242 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify, session
 from indexing import preprocess
 from indexing import indexer
-from indexing import search
+from indexing.recommender import recommend, get_similar_recipes, UserProfile
 import os
-import ast
-import re
+import json
+import pandas as pd
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "recipe-search-dev-key-change-in-prod")
 
 df = preprocess.load_recipes()
 df = preprocess.preprocess_recipes(df)
 
-if (not os.path.exists("data/inverted_index.pkl")) or (not os.path.exists("data/tfidf_index.pkl")):
-    indexer.build_and_save_index()
+INDEX_DIR = "data"
+os.makedirs(INDEX_DIR, exist_ok=True)
+
+inv_path = f"{INDEX_DIR}/inverted_index.pkl"
+tfidf_path = f"{INDEX_DIR}/tfidf_index.pkl"
+
+if not os.path.exists(inv_path):
+    print("Building inverted index...")
+    inverted_index = indexer.build_inverted_index(df)
+    indexer.save_index(inverted_index, inv_path)
+else:
+    inverted_index = indexer.load_index(inv_path)
+
+if not os.path.exists(tfidf_path):
+    print("Building TF-IDF index...")
     vectorizer, tfidf_matrix = indexer.build_tfidf_index(df)
-    indexer.save_tfidf_index(vectorizer, tfidf_matrix)
+    indexer.save_tfidf_index(vectorizer, tfidf_matrix, tfidf_path)
+else:
+    vectorizer, tfidf_matrix = indexer.load_tfidf_index(tfidf_path)
 
-inverted_index = indexer.load_index()
-vectorizer, tfidf_matrix = indexer.load_tfidf_index()
+rid_to_row = {rid: i for i, rid in enumerate(df["RecipeId"].to_numpy())}
+print(f"Ready! {len(df)} recipes indexed.")
 
-if not os.path.exists("data/dish_archetypes.pkl"):
-    archetypes, dish_recipe_counts = search.build_dish_archetypes(df, top_n=30, min_recipes=200)
-    search.save_archetypes(archetypes, dish_recipe_counts)
 
-archetypes, _dish_recipe_counts = search.load_archetypes()
+def get_profile() -> UserProfile:
+    raw = session.get("profile")
+    if raw:
+        return UserProfile.from_dict(raw)
+    return UserProfile()
 
-@app.route("/", methods=["GET", "POST"])
+def save_profile(profile: UserProfile):
+    session["profile"] = profile.to_dict()
+    session.modified = True
+
+def safe_float(value, default: float = 0.0) -> float:
+    try:
+        if value is None or pd.isna(value):
+            return default
+        return float(value)
+    except Exception:
+        return default
+
+def safe_int(value, default: int = 0) -> int:
+    try:
+        if value is None or pd.isna(value):
+            return default
+        return int(float(value))
+    except Exception:
+        return default
+
+def safe_str(value, default: str = "") -> str:
+    try:
+        if value is None or pd.isna(value):
+            return default
+        return str(value)
+    except Exception:
+        return default
+
+def safe_list(value) -> list:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    if isinstance(value, float) and pd.isna(value):
+        return []
+    if isinstance(value, str):
+        s = value.strip()
+        if not s or s.lower() == "nan":
+            return []
+        return [s]
+    return []
+
+@app.route("/")
 def home():
-    results = []
-    query = ""
-
-    if request.method == "POST":
-        query = request.form.get("query", "").strip()
-        if query:
-            results = search.search(query, df, inverted_index, vectorizer, tfidf_matrix, archetypes = archetypes, k=10)
-
-    return render_template("index.html", results=results, query=query)
+    return render_template("index.html")
 
 
-@app.route("/recipe/<int:recipe_id>")
-def recipe_detail(recipe_id):
-    recipe = df[df["RecipeId"] == recipe_id]
-    if recipe.empty:
-        return "Recipe not found", 404
+@app.route("/api/search", methods=["POST"])
+def api_search():
+    data = request.get_json(force=True)
+    query = data.get("query", "").strip()
+    ingredients = data.get("ingredients", [])
+    k = int(data.get("k", 20))
 
-    recipe = recipe.iloc[0]
+    profile = get_profile()
 
-    def pick(*keys):
-        for k in keys:
-            if k in recipe.index:
-                v = recipe[k]
-                if v is not None and str(v).strip() and str(v).lower() != "nan":
-                    return v
-        return ""
-
-    def clean_token(t):
-        s = str(t).strip()
-        s = s.strip().strip('"').strip("'")
-        if s.lower() in {"na", "nan", "none", "null"}:
-            return ""
-        return s
-
-    def parse_list(x):
-        if x is None:
-            return []
-        if isinstance(x, (list, tuple)):
-            out = [clean_token(t) for t in x]
-            return [t for t in out if t]
-
-        s = str(x).strip()
-        if s == "" or s.lower() == "nan":
-            return []
-
-        if s.startswith("c(") and s.endswith(")"):
-            s = "[" + s[2:-1] + "]"
-
-        try:
-            v = ast.literal_eval(s)
-            if isinstance(v, (list, tuple)):
-                out = [clean_token(t) for t in v]
-                return [t for t in out if t]
-        except:
-            pass
-
-        if s.startswith("[") and s.endswith("]"):
-            s = s[1:-1]
-
-        parts = [clean_token(t) for t in s.split(",")]
-        return [t for t in parts if t]
-
-    def to_steps(x):
-        s = str(x).strip() if x is not None else ""
-        if s == "" or s.lower() == "nan":
-            return []
-        lst = parse_list(s)
-        if len(lst) > 1:
-            return lst
-        s = s.replace("\\n", "\n")
-        return [p.strip() for p in re.split(r"\n\s*\n|\n|(?<=[.!?])\s+", s) if p.strip()]
-
-    description_raw = pick("Description", "RecipeDescription")
-    instructions_raw = pick("RecipeInstructions", "Instructions", "InstructionsText")
-
-    parts = parse_list(pick("RecipeIngredientParts", "Ingredients"))
-    qtys = parse_list(pick("RecipeIngredientQuantities", "Quantities"))
-    units = parse_list(pick("RecipeIngredientUnits", "Units"))
-
-    ingredients_list = []
-    for i, p in enumerate(parts):
-        q = qtys[i] if i < len(qtys) else ""
-        u = units[i] if i < len(units) else ""
-        q = clean_token(q)
-        u = clean_token(u)
-        p = clean_token(p)
-
-        line = " ".join([q, u, p]).strip()
-        if line:
-            ingredients_list.append(line)
-
-    return render_template(
-        "recipe.html",
-        recipe=recipe,
-        description_steps=to_steps(description_raw),
-        instruction_steps=to_steps(instructions_raw),
-        ingredients_list=ingredients_list,
-        description_raw=str(description_raw) if description_raw is not None else "",
-        instructions_raw=str(instructions_raw) if instructions_raw is not None else ""
+    results = recommend(
+        query=query,
+        query_ingredients=ingredients,
+        df=df,
+        inverted_index=inverted_index,
+        vectorizer=vectorizer,
+        tfidf_matrix=tfidf_matrix,
+        profile=profile,
+        k=k,
     )
+
+    return jsonify({"results": results})
+
+
+@app.route("/api/recipe/<int:recipe_id>", methods=["GET"])
+def api_recipe_detail(recipe_id: int):
+    profile = get_profile()
+    profile.record_view(recipe_id)
+    save_profile(profile)
+
+    if recipe_id not in rid_to_row:
+        return jsonify({"error": "Recipe not found"}), 404
+
+    row = df.iloc[rid_to_row[recipe_id]]
+
+    def safe_list(value):
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return value
+        if isinstance(value, tuple):
+            return list(value)
+        if isinstance(value, float) and pd.isna(value):
+            return []
+        if isinstance(value, str):
+            s = value.strip()
+            if not s or s.lower() == "nan":
+                return []
+            if s.startswith("[") and s.endswith("]"):
+                try:
+                    import ast
+                    parsed = ast.literal_eval(s)
+                    if isinstance(parsed, list):
+                        return [str(x).strip() for x in parsed if str(x).strip()]
+                except Exception:
+                    pass
+            return [x.strip() for x in s.split(",") if x.strip()]
+        return []
+
+    try:
+        similar = get_similar_recipes(
+            recipe_id,
+            df,
+            tfidf_matrix,
+            rid_to_row,
+            k=6,
+        )
+    except Exception as e:
+        print(f"similar-recipes error for {recipe_id}: {e}")
+        similar = []
+
+    return jsonify({
+        "RecipeId": safe_int(row.get("RecipeId", recipe_id), recipe_id),
+        "Name": safe_str(row.get("Name", "")),
+        "Description": safe_str(row.get("Description", "")),
+        "RecipeCategory": safe_str(row.get("RecipeCategory", "")),
+        "AggregatedRating": safe_float(row.get("AggregatedRating", 0)),
+        "ReviewCount": safe_int(row.get("ReviewCount", 0)),
+        "TotalTime": safe_str(row.get("TotalTime", "")),
+        "Calories": safe_float(row.get("Calories", 0)),
+        "RecipeServings": safe_str(row.get("RecipeServings", "")),
+        "parsed_ingredients": safe_list(row.get("parsed_ingredients", [])),
+        "parsed_instructions": safe_list(row.get("parsed_instructions", [])),
+        "parsed_keywords": safe_list(row.get("parsed_keywords", [])),
+        "is_favorited": recipe_id in profile.favorited,
+        "is_made": recipe_id in profile.made,
+        "similar": similar,
+    })
+
+
+@app.route("/api/profile/favorite/<int:recipe_id>", methods=["POST"])
+def api_toggle_favorite(recipe_id: int):
+    profile = get_profile()
+    now_favorited = profile.toggle_favorite(recipe_id)
+    save_profile(profile)
+    return jsonify({"favorited": now_favorited, "recipe_id": recipe_id})
+
+
+@app.route("/api/profile/made/<int:recipe_id>", methods=["POST"])
+def api_toggle_made(recipe_id: int):
+    profile = get_profile()
+    now_made = profile.toggle_made(recipe_id)
+    save_profile(profile)
+    return jsonify({"made": now_made, "recipe_id": recipe_id})
+
+
+@app.route("/api/profile", methods=["GET"])
+def api_profile():
+    profile = get_profile()
+    return jsonify(profile.to_dict())
+
+
+@app.route("/api/recommendations/for-you", methods=["GET"])
+def api_for_you():
+    """Purely personalized recommendations based on taste vector, no query."""
+    profile = get_profile()
+    if not profile.get_positive_recipes():
+        # Cold start: return popular recipes
+        popular = df.nlargest(20, "AggregatedRating")
+        results = []
+        for _, row in popular.iterrows():
+            results.append({
+                "RecipeId": int(row["RecipeId"]),
+                "Name": str(row["Name"]),
+                "RecipeCategory": str(row.get("RecipeCategory", "")),
+                "AggregatedRating": float(row.get("AggregatedRating", 0) or 0),
+                "TotalTime": str(row.get("TotalTime", "")),
+                "score": float(row.get("AggregatedRating", 0) or 0),
+                "is_favorited": int(row["RecipeId"]) in profile.favorited,
+                "is_made": int(row["RecipeId"]) in profile.made,
+            })
+        return jsonify({"results": results, "cold_start": True})
+
+    results = recommend(
+        query="",
+        query_ingredients=[],
+        df=df,
+        inverted_index=inverted_index,
+        vectorizer=vectorizer,
+        tfidf_matrix=tfidf_matrix,
+        profile=profile,
+        k=20,
+        alpha=0.0,
+        beta=1.0,
+        ingredient_boost=0.0,
+    )
+    return jsonify({"results": results, "cold_start": False})
 
 
 if __name__ == "__main__":
