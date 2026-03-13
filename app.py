@@ -202,12 +202,30 @@ def api_profile():
     return jsonify(profile.to_dict())
 
 
-@app.route("/api/recommendations/for-you", methods=["GET"])
+@app.route("/api/recommendations/for-you", methods=["POST"])
 def api_for_you():
-    """Purely personalized recommendations based on taste vector, no query."""
+    """Purely personalized recommendations based on taste vector + optional ingredients."""
+    data = request.get_json(force=True) or {}
+    # Accept any ingredients the user currently has in their search box
+    context_ingredients = data.get("ingredients", [])
+ 
     profile = get_profile()
+ 
     if not profile.get_positive_recipes():
-        # Cold start: return popular recipes
+        # Cold start: if they have ingredients, use those; otherwise show popular
+        if context_ingredients:
+            results = recommend(
+                query="",
+                query_ingredients=context_ingredients,
+                df=df,
+                inverted_index=inverted_index,
+                vectorizer=vectorizer,
+                tfidf_matrix=tfidf_matrix,
+                profile=profile,
+                k=20,
+            )
+            return jsonify({"results": results, "cold_start": True, "mode": "ingredients"})
+ 
         popular = df.nlargest(20, "AggregatedRating")
         results = []
         for _, row in popular.iterrows():
@@ -221,22 +239,23 @@ def api_for_you():
                 "is_favorited": int(row["RecipeId"]) in profile.favorited,
                 "is_made": int(row["RecipeId"]) in profile.made,
             })
-        return jsonify({"results": results, "cold_start": True})
-
+        return jsonify({"results": results, "cold_start": True, "mode": "popular"})
+ 
+    # Warm start: weight heavily toward taste profile, but blend in any current ingredients
     results = recommend(
         query="",
-        query_ingredients=[],
+        query_ingredients=context_ingredients,
         df=df,
         inverted_index=inverted_index,
         vectorizer=vectorizer,
         tfidf_matrix=tfidf_matrix,
         profile=profile,
         k=20,
-        alpha=0.0,
-        beta=1.0,
-        ingredient_boost=0.0,
+        alpha=0.10,   # small search/ingredient signal
+        beta=0.85,    # heavy taste-profile signal
+        gamma=0.05,   # small popularity nudge
     )
-    return jsonify({"results": results, "cold_start": False})
+    return jsonify({"results": results, "cold_start": False, "mode": "personalized"})
 
 
 if __name__ == "__main__":

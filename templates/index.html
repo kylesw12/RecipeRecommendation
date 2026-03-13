@@ -402,29 +402,51 @@
     }
 
     async function loadForYou() {
-      showView('foryou');
+      // Show a spinner immediately
       document.getElementById('foryou-area').innerHTML = `
         <div class="empty-state">
           <h3>Loading recommendations...</h3>
-          <p>Please wait a moment.</p>
+          <p>Personalizing based on your history${selectedIngredients.length ? ' and your ingredients' : ''}…</p>
         </div>
       `;
-
+ 
       try {
-        const res = await fetch('/api/recommendations/for-you');
+        // POST so we can send the current ingredient list as context
+        const res = await fetch('/api/recommendations/for-you', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ingredients: selectedIngredients })
+        });
         if (!res.ok) throw new Error(`Recommendation request failed: ${res.status}`);
         const data = await res.json();
-
+ 
         if (!data.results || data.results.length === 0) {
           renderEmpty('foryou-area', 'No recommendations yet', 'Interact with a few recipes first.');
           return;
         }
-
-        renderResults(
-          data.results,
-          'foryou-area',
-          data.cold_start ? 'Popular Recipes' : 'Picked for You'
-        );
+ 
+        // Build a human-readable label describing the mode
+        let label = 'Popular Recipes';
+        if (!data.cold_start) {
+          label = 'Picked for You';
+        } else if (data.mode === 'ingredients') {
+          label = 'Based on Your Ingredients';
+        }
+ 
+        const modeTag = data.cold_start
+          ? `<span class="foryou-mode-badge">${data.mode === 'ingredients' ? '🥕 Ingredient match' : '⭐ Popular'}</span>`
+          : `<span class="foryou-mode-badge">✨ Personalized</span>`;
+ 
+        const area = document.getElementById('foryou-area');
+        area.innerHTML = `
+          <div class="results-header-row">
+            <h2>${label}</h2>
+            ${modeTag}
+          </div>
+          <div class="results-grid">
+            ${data.results.map((r, i) => recipeCardHTML(r, i + 1)).join('')}
+          </div>
+        `;
       } catch (e) {
         renderEmpty('foryou-area', 'Could not load recommendations', e.message);
       }
