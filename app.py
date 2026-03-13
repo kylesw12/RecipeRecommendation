@@ -4,6 +4,7 @@ from indexing import indexer
 from indexing.recommender import recommend, get_similar_recipes, UserProfile
 import os
 import json
+import uuid
 import pandas as pd
 
 app = Flask(__name__)
@@ -35,16 +36,34 @@ else:
 rid_to_row = {rid: i for i, rid in enumerate(df["RecipeId"].to_numpy())}
 print(f"Ready! {len(df)} recipes indexed.")
 
+PROFILE_DIR = "data/profiles"
+os.makedirs(PROFILE_DIR, exist_ok=True)
+
+def _profile_path(session_id: str) -> str:
+    safe = "".join(c for c in session_id if c.isalnum() or c in "-_")
+    return os.path.join(PROFILE_DIR, f"{safe}.json")
 
 def get_profile() -> UserProfile:
-    raw = session.get("profile")
-    if raw:
-        return UserProfile.from_dict(raw)
-    return UserProfile()
+    sid = session.get("sid")
+    if not sid:
+        return UserProfile()
+    path = _profile_path(sid)
+    if not os.path.exists(path):
+        return UserProfile()
+    try:
+        with open(path) as f:
+            return UserProfile.from_dict(json.load(f))
+    except Exception:
+        return UserProfile()
 
 def save_profile(profile: UserProfile):
-    session["profile"] = profile.to_dict()
-    session.modified = True
+    sid = session.get("sid")
+    if not sid:
+        sid = uuid.uuid4().hex
+        session["sid"] = sid
+        session.permanent = True
+    with open(_profile_path(sid), "w") as f:
+        json.dump(profile.to_dict(), f)
 
 def safe_float(value, default: float = 0.0) -> float:
     try:
@@ -88,6 +107,9 @@ def safe_list(value) -> list:
 
 @app.route("/")
 def home():
+    if "sid" not in session:
+        session["sid"] = uuid.uuid4().hex
+        session.permanent = True
     return render_template("index.html")
 
 
@@ -196,67 +218,74 @@ def api_toggle_made(recipe_id: int):
     return jsonify({"made": now_made, "recipe_id": recipe_id})
 
 
+def recipe_row_to_card(row, profile: UserProfile) -> dict:
+    rid = safe_int(row.get("RecipeId", 0))
+    return {
+        "RecipeId": rid,
+        "Name": safe_str(row.get("Name", "")),
+        "RecipeCategory": safe_str(row.get("RecipeCategory", "")),
+        "AggregatedRating": safe_float(row.get("AggregatedRating", 0)),
+        "TotalTime": safe_str(row.get("TotalTime", "")),
+        "Calories": safe_float(row.get("Calories", 0)),
+        "score": safe_float(row.get("AggregatedRating", 0)),
+        "is_favorited": rid in profile.favorited,
+        "is_made": rid in profile.made,
+    }
+
 @app.route("/api/profile", methods=["GET"])
 def api_profile():
     profile = get_profile()
-    return jsonify(profile.to_dict())
 
+    def enrich(recipe_ids):
+        out = []
+        for rid in recipe_ids:
+            if rid not in rid_to_row:
+                continue
+            out.append(recipe_row_to_card(df.iloc[rid_to_row[rid]], profile))
+        return out
 
-@app.route("/api/recommendations/for-you", methods=["POST"])
+    top_viewed_ids = [rid for rid, _ in sorted(profile.viewed.items(), key=lambda x: -x[1])[:10]]
+
+    return jsonify({
+        "viewed_count": len(profile.viewed),
+        "favorited_count": len(profile.favorited),
+        "made_count": len(profile.made),
+        "viewed": profile.viewed,
+        "favorited": list(profile.favorited),
+        "made": list(profile.made),
+        "favorited_recipes": enrich(list(profile.favorited)),
+        "made_recipes": enrich(list(profile.made)),
+        "viewed_recipes": enrich(top_viewed_ids),
+    })
+
+@app.route("/api/recommendations/for-you", methods=["POST"])  # changed GET -> POST
 def api_for_you():
-    """Purely personalized recommendations based on taste vector + optional ingredients."""
     data = request.get_json(force=True) or {}
-    # Accept any ingredients the user currently has in their search box
     context_ingredients = data.get("ingredients", [])
- 
     profile = get_profile()
- 
+
     if not profile.get_positive_recipes():
-        # Cold start: if they have ingredients, use those; otherwise show popular
         if context_ingredients:
             results = recommend(
-                query="",
-                query_ingredients=context_ingredients,
-                df=df,
-                inverted_index=inverted_index,
-                vectorizer=vectorizer,
-                tfidf_matrix=tfidf_matrix,
-                profile=profile,
-                k=20,
+                query="", query_ingredients=context_ingredients,
+                df=df, inverted_index=inverted_index,
+                vectorizer=vectorizer, tfidf_matrix=tfidf_matrix,
+                profile=profile, k=20,
             )
             return jsonify({"results": results, "cold_start": True, "mode": "ingredients"})
- 
+
         popular = df.nlargest(20, "AggregatedRating")
-        results = []
-        for _, row in popular.iterrows():
-            results.append({
-                "RecipeId": int(row["RecipeId"]),
-                "Name": str(row["Name"]),
-                "RecipeCategory": str(row.get("RecipeCategory", "")),
-                "AggregatedRating": float(row.get("AggregatedRating", 0) or 0),
-                "TotalTime": str(row.get("TotalTime", "")),
-                "score": float(row.get("AggregatedRating", 0) or 0),
-                "is_favorited": int(row["RecipeId"]) in profile.favorited,
-                "is_made": int(row["RecipeId"]) in profile.made,
-            })
+        results = [recipe_row_to_card(row, profile) for _, row in popular.iterrows()]
         return jsonify({"results": results, "cold_start": True, "mode": "popular"})
- 
-    # Warm start: weight heavily toward taste profile, but blend in any current ingredients
+
     results = recommend(
-        query="",
-        query_ingredients=context_ingredients,
-        df=df,
-        inverted_index=inverted_index,
-        vectorizer=vectorizer,
-        tfidf_matrix=tfidf_matrix,
-        profile=profile,
-        k=20,
-        alpha=0.10,   # small search/ingredient signal
-        beta=0.85,    # heavy taste-profile signal
-        gamma=0.05,   # small popularity nudge
+        query="", query_ingredients=context_ingredients,
+        df=df, inverted_index=inverted_index,
+        vectorizer=vectorizer, tfidf_matrix=tfidf_matrix,
+        profile=profile, k=20,
+        alpha=0.10, beta=0.85, gamma=0.05,
     )
     return jsonify({"results": results, "cold_start": False, "mode": "personalized"})
-
 
 if __name__ == "__main__":
     app.run(debug=True)
