@@ -19,3 +19,6 @@
 3. **Run preprocessing and indexing**:  
     python indexing/preprocess.py  
     python indexing/indexer.py  
+
+
+
